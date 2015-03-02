@@ -1,13 +1,9 @@
 ===========
-pyhs2
+pyhs2_async
 ===========
 
-pyHS2 is a python client driver for connecting to hive server 2.
+pyHS2_async is forked from pyhs2(https://github.com/BradRuderman/pyhs2) and added feature of asynchronous query
 
-See example.py for an example of how to use it.
 
-Please log all issues/new feature requests under the issues tab and I will respond ASAP.
 
-Contact @bradruderman or bradruderman@gmail.com with questions.
 
-Enjoy
