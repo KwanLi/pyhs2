@@ -1,7 +1,9 @@
 from TCLIService.ttypes import TOpenSessionReq, TGetTablesReq, TFetchResultsReq,\
   TStatusCode, TGetResultSetMetadataReq, TGetColumnsReq, TType, TTypeId, \
   TExecuteStatementReq, TGetOperationStatusReq, TFetchOrientation, TCloseOperationReq, \
-  TCloseSessionReq, TGetSchemasReq, TGetLogReq, TCancelOperationReq, TGetCatalogsReq, TGetInfoReq
+  TCloseSessionReq, TGetSchemasReq, TGetLogReq, TCancelOperationReq, TGetCatalogsReq, TGetInfoReq, \
+  TOperationState, THandleIdentifier, TOperationHandle
+
 
 from error import Pyhs2Exception
 import threading
@@ -50,18 +52,55 @@ class Cursor(object):
     _blockRequestInProgress = False
     _cursorLock = None
 
-    def __init__(self, _client, sessionHandle):
-        self.session = sessionHandle
+    def __init__(self, _client, sessionHandle, secret=None, guid=None):
+        # self.session = sessionHandle
         self.client = _client
         self._cursorLock = threading.RLock()
+        self.secret = secret
+        self.guid = guid
+        self.sessionHandle=sessionHandle
+        self.operationHandle = self._make_operation_handle(self.secret, self.guid)
+ 
+    @staticmethod
+    def _make_operation_handle(secret, guid):
+        print '_make_operation_handle',secret, guid
+        if secret is None or guid is None:
+            return None
+        operation_id = THandleIdentifier(secret=secret, guid=guid)
+        return TOperationHandle(hasResultSet=True, modifiedRowCount=None, operationType=0, operationId=operation_id)
 
     def execute(self, hql):
         self.hasMoreRows = True
-        query = TExecuteStatementReq(self.session, statement=hql, confOverlay={})
+        print 'self.operationHandle',self.operationHandle
+        query = TExecuteStatementReq(self.sessionHandle, statement=hql, confOverlay={}, runAsync=True)
+        
         res = self.client.ExecuteStatement(query)
         self.operationHandle = res.operationHandle
+        print 'after self.operationHandle',self.operationHandle 
+        self.secret = self.operationHandle.operationId.secret
+        self.guid = self.operationHandle.operationId.guid
+
         if res.status.errorCode is not None:
             raise Pyhs2Exception(res.status.errorCode, res.status.errorMessage)
+
+    def get_state(self):
+        print 'get_state self.operationHandle',self.operationHandle 
+
+        res = self.query_state(self.operationHandle)
+        print 'res.operationState',res.operationState
+        if res.operationState == TOperationState.FINISHED_STATE:
+            return 1
+        elif res.operationState == TOperationState.CLOSED_STATE or res.operationState == TOperationState.ERROR_STATE \
+                or res.operationState == TOperationState.UKNOWN_STATE:
+            return 2
+        elif res.operationState == TOperationState.CANCELED_STATE:
+            return 3
+        return 0
+    def query_state(self, operationHandle):
+        req = TGetOperationStatusReq(operationHandle)
+        # req.sessionHandle=self.sessionHandle
+        res = self.client.GetOperationStatus(req)
+        return res
         
     def fetch(self):
         rows = []
@@ -149,7 +188,7 @@ class Cursor(object):
         self._cursorLock.acquire()
 
         # default value (or just checking that someone did not put a ridiculous size)
-        if size < 0 or size > self.MAX_BLOCK_SIZE:
+        if size < 0 or size > MAX_BLOCK_SIZE:
            size = self.arraysize
         recs = []
         for i in range(0,size):
@@ -204,7 +243,7 @@ class Cursor(object):
         return None
 
     def getDatabases(self):
-        req = TGetSchemasReq(self.session)
+        req = TGetSchemasReq(self.sessionHandle)
         res = self.client.GetSchemas(req)
         self.operationHandle = res.operationHandle
         if res.status.errorCode is not None:
@@ -219,6 +258,7 @@ class Cursor(object):
 
     def _fetch(self, rows, fetchReq):
         resultsRes = self.client.FetchResults(fetchReq)
+        print 'resultsRes',resultsRes
         for row in resultsRes.results.rows:
             rowData= []
             for i, col in enumerate(row.colVals):

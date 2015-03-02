@@ -3060,12 +3060,14 @@ class TExecuteStatementReq:
     (1, TType.STRUCT, 'sessionHandle', (TSessionHandle, TSessionHandle.thrift_spec), None, ), # 1
     (2, TType.STRING, 'statement', None, None, ), # 2
     (3, TType.MAP, 'confOverlay', (TType.STRING,None,TType.STRING,None), None, ), # 3
+    (4, TType.BOOL, 'runAsync', None, False, ), # 4 
   )
 
-  def __init__(self, sessionHandle=None, statement=None, confOverlay=None,):
+  def __init__(self, sessionHandle=None, statement=None, confOverlay=None, runAsync=thrift_spec[4][4],):
     self.sessionHandle = sessionHandle
     self.statement = statement
     self.confOverlay = confOverlay
+    self.runAsync = runAsync
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
